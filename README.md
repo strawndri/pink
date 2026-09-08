@@ -11,6 +11,7 @@ the annotated PDF opens the same way in any other reader.
 | Tool | Key | What it does |
 | --- | --- | --- |
 | Select | `V` | Click an annotation to select it, or drag a box around several |
+| Text | `T` | Select words and copy them with `Ctrl+C` |
 | Brush | `B` | Freehand drawing |
 | Highlight | `H` | Drag across words to paint them, one bar per line |
 | Note | `N` | Attach written text to a passage or to a spot on the page |
@@ -39,6 +40,19 @@ it bigger. It saves when you click away, and `Esc` closes it.
 `Enter` or a double-click opens the same note in a larger window, which also has
 a delete button.
 
+## Getting around
+
+`Ctrl+F` searches the whole document. `Enter` and `Shift+Enter` walk through the
+matches, and the counter says where you are. Every match is marked on its page,
+with the current one brighter.
+
+The list button in the toolbar opens the PDF's own table of contents, when it
+has one. Next to it, the page box takes a number and jumps there.
+
+Zoom with `+` and `-`, or `0` to go back to your default. The toolbar buttons do
+the same. `Ctrl+=` and `Ctrl+-` are left alone, because Obsidian uses them to
+zoom the whole app.
+
 ## Saving
 
 Autosave writes into the PDF about a second after you stop working. `Ctrl+S`
@@ -51,7 +65,9 @@ in the file, such as links or form fields, is preserved untouched.
 
 | | |
 | --- | --- |
-| `V` `B` `H` `N` | select, brush, highlight, note |
+| `V` `T` `B` `H` `N` | select, text, brush, highlight, note |
+| `Ctrl+F` | find in document |
+| `+` `-` `0` | zoom in, zoom out, reset |
 | `Ctrl+Z`, `Ctrl+Shift+Z` | undo, redo |
 | `Enter`, double-click | edit the note of the selected annotation |
 | `Delete` | delete selection |

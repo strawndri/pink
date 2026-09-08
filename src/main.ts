@@ -48,6 +48,7 @@ export default class PinkPlugin extends Plugin {
 
 		const tools: { tool: ToolName; name: string }[] = [
 			{ tool: "select", name: "Select tool" },
+			{ tool: "text", name: "Text selection tool" },
 			{ tool: "brush", name: "Brush tool" },
 			{ tool: "highlight", name: "Highlight tool" },
 			{ tool: "note", name: "Note tool" },
@@ -62,6 +63,7 @@ export default class PinkPlugin extends Plugin {
 		this.addViewCommand("edit-note", "Edit note of selected annotation", (view) => view.editSelectedNote());
 		this.addViewCommand("select-all", "Select all annotations on this page", (view) => view.selectAllOnPage());
 		this.addViewCommand("save", "Save annotations into the PDF", (view) => void view.save(true));
+		this.addViewCommand("find", "Find in document", (view) => view.openSearch());
 	}
 
 	private addViewCommand(id: string, name: string, run: (view: PinkView) => void): void {

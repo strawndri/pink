@@ -1,7 +1,7 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type PinkPlugin from "./main";
 
-export type ToolName = "select" | "brush" | "highlight" | "note";
+export type ToolName = "select" | "text" | "brush" | "highlight" | "note";
 
 export interface PinkSettings {
 	defaultTool: ToolName;
@@ -72,7 +72,7 @@ export class PinkSettingTab extends PluginSettingTab {
 			.setName("Default tool")
 			.addDropdown((d) =>
 				d
-					.addOptions({ select: "Select", brush: "Brush", highlight: "Highlight", note: "Note" })
+					.addOptions({ select: "Select", text: "Select text", brush: "Brush", highlight: "Highlight", note: "Note" })
 					.setValue(this.plugin.settings.defaultTool)
 					.onChange(async (v) => {
 						this.plugin.settings.defaultTool = v as ToolName;

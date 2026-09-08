@@ -116,6 +116,20 @@
 	font-variant-numeric: tabular-nums;
 }
 
+.pink-page-input {
+	width: 3.2em;
+	padding: 2px 4px;
+	text-align: right;
+	font-size: var(--font-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.pink-page-total {
+	font-size: var(--font-smaller);
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
 .pink-zoom {
 	min-width: 3.4em;
 	text-align: center;
@@ -131,6 +145,42 @@
 	background-color: var(--background-primary);
 	color: var(--text-muted);
 	font-size: var(--font-smaller);
+}
+
+/* ---------------------------------------------------------------- search */
+
+.pink-search {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-2);
+	padding: var(--size-2-2) var(--size-4-3);
+	border-bottom: 1px solid var(--background-modifier-border);
+	background-color: var(--background-primary);
+	flex: 0 0 auto;
+}
+
+.pink-search-input {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-size: var(--font-smaller);
+}
+
+.pink-search-count {
+	flex: 0 0 auto;
+	min-width: 5em;
+	text-align: right;
+	font-size: var(--font-smaller);
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.pink-search-hit {
+	fill: var(--color-accent);
+	fill-opacity: 0.25;
+}
+
+.pink-search-hit.is-current {
+	fill-opacity: 0.55;
 }
 
 /* ----------------------------------------------------------------- pages */
@@ -195,6 +245,7 @@
 	cursor: crosshair;
 }
 
+.pink-root[data-tool="text"] .pink-page,
 .pink-root[data-tool="highlight"] .pink-page,
 .pink-root[data-tool="note"] .pink-page {
 	cursor: text;

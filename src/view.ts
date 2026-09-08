@@ -42,6 +42,38 @@ const NOTE_TAB = 9;
  * worse, the canvas copy survives a delete until the file is reopened. */
 const ANNOTATIONS_OFF = 0;
 
+/** One text run from pdf.js, placed in PDF user space. */
+interface TextBox {
+	/** Offset of this run inside the page's concatenated text. */
+	start: number;
+	len: number;
+	x: number;
+	y: number;
+	w: number;
+	h: number;
+}
+
+interface PageText {
+	/** Lowercased, so searching never has to case-fold again. */
+	text: string;
+	boxes: TextBox[];
+}
+
+interface OutlineEntry {
+	title: string;
+	/** Nesting level, 0 for a top-level section. */
+	depth: number;
+	/** 0-based page, or -1 when the destination could not be resolved. */
+	page: number;
+}
+
+interface SearchMatch {
+	page: number;
+	/** One rect per text run the match spans, so a match that wraps across a
+	 * line is drawn as two bars rather than one tall box. */
+	rects: Rect[];
+}
+
 interface PageLayer {
 	index: number;
 	container: HTMLElement;
@@ -50,6 +82,7 @@ interface PageLayer {
 	overlay: SVGSVGElement;
 	hitBg: SVGRectElement;
 	annotGroup: SVGGElement;
+	searchGroup: SVGGElement;
 	draftGroup: SVGGElement;
 	page: any;
 	viewport1: Viewport;
@@ -62,6 +95,7 @@ interface PageLayer {
 
 const TOOLS: { tool: ToolName; icon: string; label: string; key: string }[] = [
 	{ tool: "select", icon: "mouse-pointer-2", label: "Select", key: "V" },
+	{ tool: "text", icon: "text-cursor", label: "Select text to copy", key: "T" },
 	{ tool: "brush", icon: "pencil", label: "Brush", key: "B" },
 	{ tool: "highlight", icon: "highlighter", label: "Highlight", key: "H" },
 	{ tool: "note", icon: "sticky-note", label: "Note", key: "N" },
@@ -81,6 +115,10 @@ export class PinkView extends FileView {
 	private noteBtn!: HTMLButtonElement;
 	private saveBtn!: HTMLButtonElement;
 	private zoomLabel!: HTMLElement;
+	private pageInput!: HTMLInputElement;
+	private pageTotal!: HTMLElement;
+	/** Flattened table of contents, or null until the PDF has been asked. */
+	private outline: OutlineEntry[] | null = null;
 	private swatchEls: HTMLElement[] = [];
 
 	private bytes: ArrayBuffer | null = null;
@@ -106,6 +144,14 @@ export class PinkView extends FileView {
 	private hoverHide = 0;
 	private dragging = false;
 	private hintShown = false;
+
+	private searchEl!: HTMLElement;
+	private searchInput!: HTMLInputElement;
+	private searchCount!: HTMLElement;
+	/** Text of each page, lazily built the first time a search runs. */
+	private searchPages: (PageText | null)[] = [];
+	private searchMatches: SearchMatch[] = [];
+	private searchAt = -1;
 
 	private dirty = false;
 	private saving = false;
@@ -144,6 +190,7 @@ export class PinkView extends FileView {
 		this.contentEl.empty();
 		this.contentEl.addClass("pink-root");
 		this.toolbarEl = this.contentEl.createDiv({ cls: "pink-toolbar" });
+		this.buildSearchBar();
 		this.scrollEl = this.contentEl.createDiv({ cls: "pink-scroll" });
 		this.pagesEl = this.scrollEl.createDiv({ cls: "pink-pages" });
 		this.statusEl = this.contentEl.createDiv({ cls: "pink-status" });
@@ -197,6 +244,10 @@ export class PinkView extends FileView {
 		this.selection.clear();
 		this.dirty = false;
 		this.hintShown = false;
+		this.searchPages = [];
+		this.searchMatches = [];
+		this.searchAt = -1;
+		this.outline = null;
 		this.setStatus("Loading…");
 
 		try {
@@ -319,6 +370,26 @@ export class PinkView extends FileView {
 		this.deleteBtn = this.iconButton(edit, "trash-2", "Delete selection (Del)");
 		this.deleteBtn.addEventListener("click", () => this.deleteSelection());
 
+		const nav = bar.createDiv({ cls: "pink-group" });
+		this.iconButton(nav, "list", "Table of contents").addEventListener("click", (evt) =>
+			void this.showOutline(evt),
+		);
+		this.pageInput = nav.createEl("input", {
+			cls: "pink-page-input",
+			type: "text",
+			attr: { "aria-label": "Go to page", title: "Go to page", inputmode: "numeric" },
+		});
+		this.pageTotal = nav.createSpan({ cls: "pink-page-total" });
+		this.pageInput.addEventListener("keydown", (evt) => {
+			if (evt.key !== "Enter") return;
+			evt.preventDefault();
+			const wanted = Number.parseInt(this.pageInput.value, 10);
+			if (Number.isFinite(wanted)) this.goToPage(wanted - 1);
+			this.syncPageBox();
+			this.pageInput.blur();
+		});
+		this.pageInput.addEventListener("blur", () => this.syncPageBox());
+
 		const zoom = bar.createDiv({ cls: "pink-group" });
 		this.iconButton(zoom, "zoom-out", "Zoom out").addEventListener("click", () => this.zoomBy(1 / 1.2));
 		this.zoomLabel = zoom.createSpan({ cls: "pink-zoom" });
@@ -371,6 +442,7 @@ export class PinkView extends FileView {
 		this.noteBtn.disabled = this.selection.size !== 1;
 		this.saveBtn.toggleClass("is-dirty", this.dirty);
 		this.zoomLabel.setText(`${Math.round(this.scale * 100)}%`);
+		this.syncPageBox();
 	}
 
 	private updateStatus(): void {
@@ -417,9 +489,12 @@ export class PinkView extends FileView {
 			overlay.appendChild(hitBg);
 
 			const annotGroup = document.createElementNS(SVG_NS, "g");
+			const searchGroup = document.createElementNS(SVG_NS, "g");
+			searchGroup.setAttribute("pointer-events", "none");
 			const draftGroup = document.createElementNS(SVG_NS, "g");
 			draftGroup.setAttribute("pointer-events", "none");
 			overlay.appendChild(annotGroup);
+			overlay.appendChild(searchGroup);
 			overlay.appendChild(draftGroup);
 
 			const layer: PageLayer = {
@@ -430,6 +505,7 @@ export class PinkView extends FileView {
 				overlay,
 				hitBg,
 				annotGroup,
+				searchGroup,
 				draftGroup,
 				page,
 				viewport1,
@@ -539,6 +615,78 @@ export class PinkView extends FileView {
 		}
 	}
 
+	/* ----------------------------------------------------------- navigation */
+
+	/** Scrolls a page to the top of the view. Out-of-range numbers are clamped,
+	 * so typing 999 lands on the last page rather than doing nothing. */
+	goToPage(index: number): void {
+		if (this.layers.length === 0) return;
+		const layer = this.layers[Math.min(Math.max(0, index), this.layers.length - 1)];
+		this.scrollEl.scrollTop = layer.container.offsetTop - this.pagesEl.offsetTop;
+		void this.renderPage(layer);
+	}
+
+	private syncPageBox(): void {
+		// Leave it alone while it is being typed into.
+		if (document.activeElement !== this.pageInput) {
+			this.pageInput.value = this.layers.length > 0 ? String(this.currentPage + 1) : "";
+		}
+		this.pageTotal.setText(this.layers.length > 0 ? `/ ${this.layers.length}` : "");
+	}
+
+	/** Reads the PDF's own table of contents and flattens it into a list. */
+	private async ensureOutline(): Promise<void> {
+		if (this.outline || !this.pdf) return;
+		const flat: OutlineEntry[] = [];
+		try {
+			const walk = async (nodes: any[], depth: number): Promise<void> => {
+				for (const node of nodes ?? []) {
+					flat.push({
+						title: String(node.title ?? "").trim() || "(untitled)",
+						depth,
+						page: await this.destinationPage(node.dest),
+					});
+					if (node.items?.length) await walk(node.items, depth + 1);
+				}
+			};
+			await walk(await this.pdf.getOutline(), 0);
+		} catch (err) {
+			console.warn("Pink: could not read the table of contents", err);
+		}
+		this.outline = flat;
+	}
+
+	/** A destination is either a named one that has to be looked up, or an
+	 * explicit array whose first entry is a reference to the page. */
+	private async destinationPage(dest: unknown): Promise<number> {
+		try {
+			const explicit = typeof dest === "string" ? await this.pdf.getDestination(dest) : dest;
+			if (!Array.isArray(explicit) || explicit.length === 0) return -1;
+			return await this.pdf.getPageIndex(explicit[0]);
+		} catch {
+			return -1;
+		}
+	}
+
+	private async showOutline(evt: MouseEvent): Promise<void> {
+		await this.ensureOutline();
+		const menu = new Menu();
+		if (!this.outline || this.outline.length === 0) {
+			menu.addItem((item) => item.setTitle("This PDF has no table of contents").setDisabled(true));
+		} else {
+			for (const entry of this.outline) {
+				menu.addItem((item) =>
+					item
+						// Menu titles are plain text, so nesting is shown with padding.
+						.setTitle("\u00a0\u00a0\u00a0\u00a0".repeat(entry.depth) + entry.title)
+						.setDisabled(entry.page < 0)
+						.onClick(() => this.goToPage(entry.page)),
+				);
+			}
+		}
+		menu.showAtMouseEvent(evt);
+	}
+
 	private updateCurrentPage(): void {
 		const top = this.scrollEl.scrollTop;
 		let index = 0;
@@ -548,6 +696,7 @@ export class PinkView extends FileView {
 		}
 		if (index !== this.currentPage) {
 			this.currentPage = index;
+			this.syncPageBox();
 			this.updateStatus();
 		}
 	}
@@ -802,9 +951,188 @@ export class PinkView extends FileView {
 		this.tooltipEl.removeClass("is-visible");
 	}
 
+	/* --------------------------------------------------------------- search */
+
+	private buildSearchBar(): void {
+		this.searchEl = this.contentEl.createDiv({ cls: "pink-search" });
+		this.searchEl.hidden = true;
+
+		this.searchInput = this.searchEl.createEl("input", {
+			cls: "pink-search-input",
+			type: "text",
+			attr: { placeholder: "Find in document", spellcheck: "false" },
+		});
+		this.searchCount = this.searchEl.createSpan({ cls: "pink-search-count" });
+
+		const prev = this.iconButton(this.searchEl, "chevron-up", "Previous match (Shift+Enter)");
+		prev.addEventListener("click", () => this.stepMatch(-1));
+		const next = this.iconButton(this.searchEl, "chevron-down", "Next match (Enter)");
+		next.addEventListener("click", () => this.stepMatch(1));
+		const close = this.iconButton(this.searchEl, "x", "Close (Esc)");
+		close.addEventListener("click", () => this.closeSearch());
+
+		let debounce = 0;
+		this.registerDomEvent(this.searchInput, "input", () => {
+			window.clearTimeout(debounce);
+			debounce = window.setTimeout(() => void this.runSearch(), 180);
+		});
+		this.registerDomEvent(this.searchInput, "keydown", (evt) => {
+			if (evt.key === "Escape") {
+				evt.preventDefault();
+				this.closeSearch();
+			} else if (evt.key === "Enter") {
+				evt.preventDefault();
+				// Enter before the debounce has fired should search, not step.
+				if (this.searchMatches.length === 0) void this.runSearch();
+				else this.stepMatch(evt.shiftKey ? -1 : 1);
+			}
+		});
+	}
+
+	openSearch(): void {
+		this.searchEl.hidden = false;
+		this.searchInput.focus();
+		this.searchInput.select();
+	}
+
+	private closeSearch(): void {
+		this.searchEl.hidden = true;
+		this.searchMatches = [];
+		this.searchAt = -1;
+		this.drawSearchHits();
+		this.contentEl.focus();
+	}
+
+	/** Reads the text of every page once, and keeps where each run sits so a
+	 * match can be turned back into a rectangle on the page. */
+	private async ensureSearchIndex(): Promise<void> {
+		if (this.searchPages.length === this.layers.length) return;
+		const pages: (PageText | null)[] = [];
+		for (const layer of this.layers) {
+			try {
+				const content = await layer.page.getTextContent();
+				let text = "";
+				const boxes: TextBox[] = [];
+				for (const item of content.items as any[]) {
+					const str: string = item.str ?? "";
+					if (str.length > 0) {
+						const t: number[] = item.transform;
+						boxes.push({
+							start: text.length,
+							len: str.length,
+							x: t[4],
+							y: t[5],
+							w: item.width ?? 0,
+							h: item.height ?? 0,
+						});
+						text += str;
+					}
+					// pdf.js emits no space at a line break, which would glue the last
+					// word of a line to the first of the next one.
+					if (item.hasEOL) text += " ";
+				}
+				pages.push({ text: text.toLowerCase(), boxes });
+			} catch (err) {
+				console.warn("Pink: could not read text of page", layer.index + 1, err);
+				pages.push(null);
+			}
+		}
+		this.searchPages = pages;
+	}
+
+	private async runSearch(): Promise<void> {
+		const needle = this.searchInput.value.trim().toLowerCase();
+		this.searchMatches = [];
+		this.searchAt = -1;
+
+		if (needle.length > 0) {
+			await this.ensureSearchIndex();
+			this.searchPages.forEach((page, index) => {
+				if (!page) return;
+				let at = page.text.indexOf(needle);
+				while (at !== -1) {
+					const rects = this.matchRects(page, at, at + needle.length);
+					if (rects.length > 0) this.searchMatches.push({ page: index, rects });
+					at = page.text.indexOf(needle, at + needle.length);
+				}
+			});
+			if (this.searchMatches.length > 0) this.searchAt = 0;
+		}
+
+		this.drawSearchHits();
+		this.updateSearchCount();
+		if (this.searchAt >= 0) this.revealMatch();
+	}
+
+	/** Turns a span of the page text back into rectangles. Inside one run the
+	 * position is worked out by character count, which is an approximation for
+	 * proportional fonts but plenty for showing where a hit is. */
+	private matchRects(page: PageText, from: number, to: number): Rect[] {
+		const rects: Rect[] = [];
+		for (const box of page.boxes) {
+			const start = Math.max(from, box.start);
+			const end = Math.min(to, box.start + box.len);
+			if (start >= end || box.len === 0) continue;
+			rects.push({
+				x1: box.x + (box.w * (start - box.start)) / box.len,
+				y1: box.y,
+				x2: box.x + (box.w * (end - box.start)) / box.len,
+				y2: box.y + box.h,
+			});
+		}
+		return rects;
+	}
+
+	private stepMatch(by: number): void {
+		if (this.searchMatches.length === 0) return;
+		const count = this.searchMatches.length;
+		this.searchAt = (this.searchAt + by + count) % count;
+		this.drawSearchHits();
+		this.updateSearchCount();
+		this.revealMatch();
+	}
+
+	private drawSearchHits(): void {
+		for (const layer of this.layers) layer.searchGroup.empty();
+		this.searchMatches.forEach((match, index) => {
+			const layer = this.layers[match.page];
+			if (!layer) return;
+			for (const rect of match.rects) {
+				const hit = el(layer.searchGroup, "polygon", {
+					points: quadToPoints(layer.viewport1, rect),
+					"pointer-events": "none",
+				});
+				hit.addClass("pink-search-hit");
+				if (index === this.searchAt) hit.addClass("is-current");
+			}
+		});
+	}
+
+	private updateSearchCount(): void {
+		const total = this.searchMatches.length;
+		const query = this.searchInput.value.trim();
+		if (query.length === 0) this.searchCount.setText("");
+		else if (total === 0) this.searchCount.setText("no matches");
+		else this.searchCount.setText(`${this.searchAt + 1} / ${total}`);
+	}
+
+	private revealMatch(): void {
+		const match = this.searchMatches[this.searchAt];
+		const layer = match ? this.layers[match.page] : null;
+		if (!match || !layer) return;
+		void this.renderPage(layer);
+		const bounds = unionRects(match.rects);
+		const spot = toViewportPt(layer.viewport1, bounds.x1, bounds.y2);
+		const top = layer.container.offsetTop - this.pagesEl.offsetTop + spot.y * this.scale;
+		this.scrollEl.scrollTop = Math.max(0, top - this.scrollEl.clientHeight / 3);
+	}
+
 	/* --------------------------------------------------------- interaction */
 
 	private setTool(tool: ToolName): void {
+		// Leaving the text tool with words still lit would look like a live
+		// selection that no longer does anything.
+		if (this.tool === "text" && tool !== "text") window.getSelection()?.removeAllRanges();
 		this.tool = tool;
 		this.hideTooltip();
 		if (tool !== "select") this.selection.clear();
@@ -814,7 +1142,7 @@ export class PinkView extends FileView {
 	}
 
 	private applyToolCursor(): void {
-		const selectable = this.tool === "highlight" || this.tool === "note";
+		const selectable = this.tool === "text" || this.tool === "highlight" || this.tool === "note";
 		const drawing = this.tool === "select" || this.tool === "brush";
 		this.contentEl.dataset.tool = this.tool;
 		for (const layer of this.layers) {
@@ -851,6 +1179,11 @@ export class PinkView extends FileView {
 	private onPointerDown(layer: PageLayer, evt: PointerEvent): void {
 		if (evt.button !== 0) return;
 		const start = this.clientToPdf(layer, evt.clientX, evt.clientY);
+
+		// The text tool does nothing of its own: it just leaves the text layer
+		// exposed so the browser can select, and the selection survives for Ctrl+C
+		// because nothing here consumes it.
+		if (this.tool === "text") return;
 
 		if (this.tool === "brush") {
 			evt.preventDefault();
@@ -1297,6 +1630,12 @@ export class PinkView extends FileView {
 			void this.save(true);
 			return;
 		}
+		if (mod && evt.key.toLowerCase() === "f") {
+			evt.preventDefault();
+			evt.stopPropagation();
+			this.openSearch();
+			return;
+		}
 		if (mod && evt.key.toLowerCase() === "a") {
 			evt.preventDefault();
 			this.selectAllOnPage();
@@ -1320,6 +1659,25 @@ export class PinkView extends FileView {
 			return;
 		}
 		if (mod) return;
+
+		// Plain +/-/0, the way every PDF reader does it. Ctrl+= and Ctrl+- are
+		// left alone because Electron uses them to zoom the whole app.
+		if (evt.key === "+" || evt.key === "=") {
+			evt.preventDefault();
+			this.zoomBy(1.2);
+			return;
+		}
+		if (evt.key === "-" || evt.key === "_") {
+			evt.preventDefault();
+			this.zoomBy(1 / 1.2);
+			return;
+		}
+		if (evt.key === "0") {
+			evt.preventDefault();
+			this.setScale(this.plugin.settings.defaultZoom);
+			return;
+		}
+
 		const byKey = TOOLS.find((t) => t.key.toLowerCase() === evt.key.toLowerCase());
 		if (byKey) {
 			evt.preventDefault();
