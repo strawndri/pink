@@ -1,0 +1,361 @@
+/* ---------------------------------------------------------------- layout */
+
+.pink-root {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+	padding: 0;
+	overflow: hidden;
+	background-color: var(--background-secondary);
+}
+
+.pink-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-3);
+	padding: var(--size-4-2) var(--size-4-3);
+	border-bottom: 1px solid var(--background-modifier-border);
+	background-color: var(--background-primary);
+	flex: 0 0 auto;
+}
+
+.pink-group {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	padding-right: var(--size-4-3);
+	border-right: 1px solid var(--background-modifier-border);
+}
+
+.pink-group:last-child {
+	border-right: none;
+	padding-right: 0;
+}
+
+.pink-btn {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: var(--radius-s);
+	background-color: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+	box-shadow: none;
+}
+
+.pink-btn:hover:not(:disabled) {
+	background-color: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.pink-btn.is-active {
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.pink-btn:disabled {
+	opacity: 0.35;
+	cursor: default;
+}
+
+.pink-btn.is-dirty {
+	color: var(--text-accent);
+}
+
+.pink-btn.is-dirty::after {
+	content: "";
+	position: absolute;
+	margin: -14px 0 0 14px;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background-color: var(--text-accent);
+}
+
+.pink-swatches {
+	gap: var(--size-2-2);
+}
+
+.pink-swatch {
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: 2px solid var(--background-modifier-border);
+	border-radius: 50%;
+	background-color: var(--pink-swatch);
+	cursor: pointer;
+	box-shadow: none;
+}
+
+.pink-swatch.is-active {
+	border-color: var(--interactive-accent);
+	transform: scale(1.15);
+}
+
+.pink-slider {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-2);
+}
+
+.pink-slider input[type="range"] {
+	width: 82px;
+}
+
+.pink-slider-value {
+	min-width: 2.2em;
+	font-size: var(--font-smaller);
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.pink-zoom {
+	min-width: 3.4em;
+	text-align: center;
+	font-size: var(--font-smaller);
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.pink-status {
+	flex: 0 0 auto;
+	padding: var(--size-2-2) var(--size-4-3);
+	border-top: 1px solid var(--background-modifier-border);
+	background-color: var(--background-primary);
+	color: var(--text-muted);
+	font-size: var(--font-smaller);
+}
+
+/* ----------------------------------------------------------------- pages */
+
+.pink-scroll {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	padding: var(--size-4-4);
+}
+
+.pink-pages {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--size-4-4);
+}
+
+.pink-page {
+	position: relative;
+	flex: 0 0 auto;
+	background-color: white;
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.pink-canvas {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	display: block;
+	z-index: 0;
+}
+
+.pink-overlay {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+	/* Above the text layer, so annotations stay clickable in select mode. */
+	z-index: 2;
+	/* An inline <svg> is hit-tested over its whole box, which would swallow the
+	 * drag that selects text underneath. Every child that has to be clickable
+	 * (the annotations, the drawing backdrop) re-enables this for itself. */
+	pointer-events: none;
+}
+
+.pink-annot {
+	transition: none;
+}
+
+.pink-marquee {
+	fill: var(--interactive-accent);
+	fill-opacity: 0.12;
+	stroke: var(--interactive-accent);
+	stroke-width: 1;
+	stroke-dasharray: 4 3;
+}
+
+.pink-root[data-tool="brush"] .pink-page {
+	cursor: crosshair;
+}
+
+.pink-root[data-tool="highlight"] .pink-page,
+.pink-root[data-tool="note"] .pink-page {
+	cursor: text;
+}
+
+.pink-root[data-tool="select"] .pink-annot {
+	cursor: pointer;
+}
+
+/* --------------------------------------------------------- pdf.js text layer
+ * Mirrors the stylesheet pdf.js expects so text selection lines up with the
+ * rendered page at any zoom level. */
+
+/* Obsidian sets `user-select: none` on <body> and only re-enables it for its
+ * own viewer (`.pdf-container .textLayer`), so selection has to be turned back
+ * on here or the highlight tool has nothing to select. Two classes are used on
+ * the container so these rules beat the bundled pdf.js stylesheet. */
+.pink-textlayer.textLayer {
+	position: absolute;
+	inset: 0;
+	overflow: clip;
+	line-height: 1;
+	text-align: initial;
+	text-size-adjust: none;
+	forced-color-adjust: none;
+	transform-origin: 0 0;
+	opacity: 1;
+	z-index: 1;
+	caret-color: transparent;
+	-webkit-user-select: text;
+	user-select: text;
+}
+
+.pink-textlayer span,
+.pink-textlayer br {
+	position: absolute;
+	color: transparent;
+	white-space: pre;
+	cursor: text;
+	transform-origin: 0% 0%;
+	margin: 0;
+	-webkit-user-select: text;
+	user-select: text;
+}
+
+/* pdf.js marks pure-image spans unselectable; keep that. */
+.pink-textlayer span[role="img"] {
+	-webkit-user-select: none;
+	user-select: none;
+	cursor: default;
+}
+
+/* The real text lives on the canvas *under* this layer, so the selection fill
+ * has to stay translucent or it hides what is being selected. Both classes are
+ * needed: the active theme may style `.textLayer ::selection` at the same
+ * specificity and win on load order. */
+.pink-textlayer.textLayer ::selection,
+.pink-textlayer.textLayer::selection {
+	background-color: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+.pink-textlayer .endOfContent {
+	position: absolute;
+	inset: 100% 0 0 0;
+	display: block;
+	z-index: 0;
+	cursor: default;
+	user-select: none;
+}
+
+/* ---------------------------------------------------------- note balloon
+ * Hovering an annotation that carries a note pops this up just above it. It is
+ * a real editable field, not a passive tooltip, so it takes pointer events
+ * once visible and can be resized by its corner. */
+
+.pink-tooltip {
+	position: fixed;
+	left: 0;
+	top: 0;
+	z-index: var(--layer-tooltip, 70);
+	padding: var(--size-2-1);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background-color: var(--background-primary);
+	box-shadow: var(--shadow-s, 0 4px 16px rgba(0, 0, 0, 0.25));
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+}
+
+.pink-tooltip.is-visible {
+	opacity: 1;
+	visibility: visible;
+	pointer-events: auto;
+}
+
+.pink-tooltip-input {
+	display: block;
+	box-sizing: content-box;
+	width: 15em;
+	min-width: 9em;
+	max-width: 80vw;
+	max-height: 50vh;
+	padding: var(--size-2-2) var(--size-2-3);
+	border: none;
+	background-color: transparent;
+	color: var(--text-normal);
+	font-family: var(--font-text);
+	font-size: var(--font-smaller);
+	line-height: var(--line-height-tight, 1.4);
+	/* Drag the corner to make room for a longer note. */
+	resize: both;
+}
+
+.pink-tooltip-input:focus {
+	outline: none;
+	box-shadow: none;
+}
+
+/* Arrow, in two layers: the border colour sits one pixel behind the fill. */
+.pink-tooltip::before,
+.pink-tooltip::after {
+	content: "";
+	position: absolute;
+	left: var(--pink-arrow, 50%);
+	width: 0;
+	height: 0;
+	margin-left: -7px;
+	border: 7px solid transparent;
+	pointer-events: none;
+}
+
+.pink-tooltip::before {
+	top: 100%;
+	border-top-color: var(--background-modifier-border);
+}
+
+.pink-tooltip::after {
+	top: calc(100% - 1px);
+	border-top-color: var(--background-primary);
+}
+
+.pink-tooltip.is-below::before {
+	top: auto;
+	bottom: 100%;
+	border-top-color: transparent;
+	border-bottom-color: var(--background-modifier-border);
+}
+
+.pink-tooltip.is-below::after {
+	top: auto;
+	bottom: calc(100% - 1px);
+	border-top-color: transparent;
+	border-bottom-color: var(--background-primary);
+}
+
+/* ---------------------------------------------------------------- modals */
+
+.pink-note-textarea {
+	width: 100%;
+	min-height: 8em;
+	resize: vertical;
+	font-family: var(--font-text);
+}

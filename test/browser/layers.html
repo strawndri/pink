@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Pink layer stack</title>
+<!-- The real plugin stylesheet is under test here, not a copy of it. -->
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  /* Obsidian's own stylesheet disables selection for the whole app. */
+  body { user-select: none; -webkit-user-select: none; margin: 0; }
+  /* A few Obsidian design tokens the plugin stylesheet references. */
+  :root {
+    --size-2-2: 4px; --size-4-1: 4px; --size-4-2: 8px; --size-4-3: 12px; --size-4-4: 16px;
+    --radius-s: 4px; --radius-m: 8px; --font-smaller: 13px;
+    --background-primary: #fff; --background-secondary: #f2f2f2;
+    --background-modifier-border: #ddd; --background-modifier-hover: #eee;
+    --text-normal: #222; --text-muted: #666; --text-accent: #06c;
+    --interactive-accent: #06c; --text-on-accent: #fff; --font-text: sans-serif;
+  }
+  /* pdf.js's stylesheet, as Obsidian ships it. */
+  .textLayer { position: absolute; inset: 0; overflow: clip; line-height: 1; z-index: 0; }
+  .textLayer span { color: transparent; position: absolute; white-space: pre; cursor: text; }
+  .pink-page { width: 600px; height: 300px; }
+</style>
+<div class="pink-root">
+  <div class="pink-scroll"><div class="pink-pages">
+    <div class="pink-page" id="page">
+      <canvas class="pink-canvas" width="600" height="300"></canvas>
+      <div class="textLayer pink-textlayer" id="text">
+        <span style="left:40px; top:40px;  font-size:20px;">The quick brown fox jumps over</span>
+        <span style="left:40px; top:80px;  font-size:20px;">the lazy dog and keeps going on</span>
+        <span style="left:40px; top:120px; font-size:20px;">for a third line of body text.</span>
+      </div>
+      <svg class="pink-overlay" id="overlay" viewBox="0 0 600 300" preserveAspectRatio="none">
+        <rect id="hitbg" x="0" y="0" width="600" height="300" fill="transparent" pointer-events="none"/>
+        <g id="annots" pointer-events="auto">
+          <polygon id="hl" data-annot-id="a1" points="300,220 500,220 500,250 300,250"
+                   fill="gold" fill-opacity="0.4" pointer-events="all"/>
+        </g>
+      </svg>
+    </div>
+  </div></div>
+</div>

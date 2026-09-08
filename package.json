@@ -1,0 +1,31 @@
+{
+  "name": "obsidian-pink",
+  "version": "1.0.0",
+  "description": "Draw, highlight and take notes directly inside PDFs in Obsidian.",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "build:test": "esbuild src/pdfio.ts --bundle --format=esm --target=es2020 --outfile=build-test/pdfio.js --external:pdf-lib && esbuild src/types.ts --bundle --format=esm --target=es2020 --outfile=build-test/types.js",
+    "test": "npm run build:test && node test/quads.mjs && node test/roundtrip.mjs",
+    "deploy": "npm run build && node scripts/deploy.mjs"
+  },
+  "keywords": [
+    "obsidian",
+    "pdf",
+    "annotation"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "builtin-modules": "^4.0.0",
+    "esbuild": "^0.25.0",
+    "obsidian": "latest",
+    "tslib": "^2.8.1",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
+  }
+}
