@@ -109,6 +109,9 @@ export class PinkView extends FileView {
 	private pagesEl!: HTMLElement;
 	private statusEl!: HTMLElement;
 	private toolButtons: Partial<Record<ToolName, HTMLElement>> = {};
+	private optionsEl!: HTMLElement;
+	private optionGroups: Partial<Record<ToolName, HTMLElement>> = {};
+	private optionsHide = 0;
 	private undoBtn!: HTMLButtonElement;
 	private redoBtn!: HTMLButtonElement;
 	private deleteBtn!: HTMLButtonElement;
@@ -135,6 +138,7 @@ export class PinkView extends FileView {
 	private tool: ToolName;
 	private color: string;
 	private brushWidth: number;
+	private brushOpacity: number;
 	private highlightOpacity: number;
 	private scale: number;
 	private dark: boolean;
@@ -171,6 +175,7 @@ export class PinkView extends FileView {
 		this.tool = s.defaultTool;
 		this.color = s.highlightColor;
 		this.brushWidth = s.brushWidth;
+		this.brushOpacity = s.brushOpacity;
 		this.highlightOpacity = s.highlightOpacity;
 		this.scale = s.defaultZoom;
 		this.dark = s.darkPdf;
@@ -216,6 +221,7 @@ export class PinkView extends FileView {
 			this.hideTooltip();
 		});
 
+		this.buildToolOptions();
 		this.buildToolbar();
 		this.applyDark();
 		this.registerDomEvent(document, "keydown", (evt) => {
@@ -295,6 +301,8 @@ export class PinkView extends FileView {
 		if (this.dirty) await this.save(true);
 		// The balloon hangs off <body>, so it outlives contentEl unless removed.
 		this.tooltipEl.remove();
+		window.clearTimeout(this.optionsHide);
+		this.optionsEl.remove();
 		this.teardownPages();
 	}
 
@@ -322,6 +330,10 @@ export class PinkView extends FileView {
 		for (const t of TOOLS) {
 			const btn = this.iconButton(tools, t.icon, `${t.label} (${t.key})`);
 			btn.addEventListener("click", () => this.setTool(t.tool));
+			if (this.optionGroups[t.tool]) {
+				this.registerDomEvent(btn, "pointerenter", () => this.showToolOptions(t.tool, btn));
+				this.registerDomEvent(btn, "pointerleave", () => this.scheduleOptionsHide());
+			}
 			this.toolButtons[t.tool] = btn;
 		}
 
@@ -351,34 +363,6 @@ export class PinkView extends FileView {
 		this.customSwatch.value = this.color;
 		this.customSwatch.addEventListener("input", () => this.setColor(this.customSwatch.value));
 		this.customSwatch.addEventListener("change", () => this.pickColor(this.customSwatch.value));
-
-		const sliders = bar.createDiv({ cls: "pink-group" });
-		this.slider(
-			sliders,
-			"Brush width",
-			0.5,
-			20,
-			0.5,
-			this.brushWidth,
-			(v) => (this.brushWidth = v),
-			(v) =>
-				this.applyToSelection((a) => {
-					if (a.kind === "ink") a.width = v;
-				}),
-		);
-		this.slider(
-			sliders,
-			"Highlight opacity",
-			0.1,
-			1,
-			0.05,
-			this.highlightOpacity,
-			(v) => (this.highlightOpacity = v),
-			(v) =>
-				this.applyToSelection((a) => {
-					if (a.kind !== "ink") a.opacity = v;
-				}),
-		);
 
 		const edit = bar.createDiv({ cls: "pink-group" });
 		this.undoBtn = this.iconButton(edit, "undo-2", "Undo (Ctrl+Z)");
@@ -453,6 +437,86 @@ export class PinkView extends FileView {
 		});
 		// Commit on release so dragging the slider is a single undo step.
 		input.addEventListener("change", () => onCommit(Number(input.value)));
+	}
+
+	/* --------------------------------------------------------- tool options
+	 * The brush and highlight knobs used to sit in the toolbar, where they ate a
+	 * third of the row and only ever applied to one tool at a time. They now
+	 * live in a small panel that opens off the tool button it belongs to. Like
+	 * the note balloon it hangs off <body>, so nothing in the toolbar clips it,
+	 * and it opens below the button because the toolbar is already at the top of
+	 * the view. */
+	private buildToolOptions(): void {
+		this.optionsEl = document.body.createDiv({ cls: "pink-tool-options" });
+		// Moving the pointer off the button and onto the panel must not close
+		// it, or the slider could never be reached.
+		this.registerDomEvent(this.optionsEl, "pointerenter", () => window.clearTimeout(this.optionsHide));
+		this.registerDomEvent(this.optionsEl, "pointerleave", () => this.scheduleOptionsHide());
+
+		const brush = this.optionsEl.createDiv({ cls: "pink-option-group" });
+		this.optionRow(brush, "Width", "Brush width", 0.5, 20, 0.5, this.brushWidth,
+			(v) => (this.brushWidth = v),
+			(v) =>
+				this.applyToSelection((a) => {
+					if (a.kind === "ink") a.width = v;
+				}),
+		);
+		this.optionRow(brush, "Opacity", "Brush opacity", 0.1, 1, 0.05, this.brushOpacity,
+			(v) => (this.brushOpacity = v),
+			(v) =>
+				this.applyToSelection((a) => {
+					if (a.kind === "ink") a.opacity = v;
+				}),
+		);
+		this.optionGroups.brush = brush;
+
+		const mark = this.optionsEl.createDiv({ cls: "pink-option-group" });
+		this.optionRow(mark, "Opacity", "Highlight opacity", 0.1, 1, 0.05, this.highlightOpacity,
+			(v) => (this.highlightOpacity = v),
+			(v) =>
+				this.applyToSelection((a) => {
+					// Ink has its own opacity slider, under the brush.
+					if (a.kind !== "ink") a.opacity = v;
+				}),
+		);
+		// Notes carry an opacity too, so they share the group.
+		this.optionGroups.highlight = mark;
+		this.optionGroups.note = mark;
+	}
+
+	private optionRow(
+		group: HTMLElement,
+		text: string,
+		label: string,
+		min: number,
+		max: number,
+		step: number,
+		value: number,
+		onInput: (v: number) => void,
+		onCommit: (v: number) => void,
+	): void {
+		const row = group.createDiv({ cls: "pink-option-row" });
+		row.createSpan({ cls: "pink-option-label", text });
+		this.slider(row, label, min, max, step, value, onInput, onCommit);
+	}
+
+	private showToolOptions(tool: ToolName, anchor: HTMLElement): void {
+		const group = this.optionGroups[tool];
+		if (!group) return;
+		window.clearTimeout(this.optionsHide);
+		for (const el of new Set(Object.values(this.optionGroups))) el?.toggleClass("is-hidden", el !== group);
+		// Opened first, then measured: the panel has no size while it is closed.
+		this.optionsEl.addClass("is-open");
+		const btn = anchor.getBoundingClientRect();
+		const panel = this.optionsEl.getBoundingClientRect();
+		const left = btn.left + btn.width / 2 - panel.width / 2;
+		this.optionsEl.style.left = `${Math.max(8, Math.min(window.innerWidth - panel.width - 8, left))}px`;
+		this.optionsEl.style.top = `${btn.bottom + 6}px`;
+	}
+
+	private scheduleOptionsHide(): void {
+		window.clearTimeout(this.optionsHide);
+		this.optionsHide = window.setTimeout(() => this.optionsEl.removeClass("is-open"), 160);
 	}
 
 	private updateToolbar(): void {
@@ -1260,7 +1324,7 @@ export class PinkView extends FileView {
 		const preview = el(layer.draftGroup, "polyline", {
 			fill: "none",
 			stroke: rgbToCss(hexToRgb(this.color)),
-			"stroke-opacity": String(this.plugin.settings.brushOpacity),
+			"stroke-opacity": String(this.brushOpacity),
 			"stroke-width": String(this.brushWidth),
 			"stroke-linecap": "round",
 			"stroke-linejoin": "round",
@@ -1289,7 +1353,7 @@ export class PinkView extends FileView {
 						kind: "ink",
 						page: layer.index,
 						color: hexToRgb(this.color),
-						opacity: this.plugin.settings.brushOpacity,
+						opacity: this.brushOpacity,
 						contents: "",
 						author: DEFAULT_AUTHOR,
 						width: this.brushWidth,

@@ -358,6 +358,49 @@
  * a real editable field, not a passive tooltip, so it takes pointer events
  * once visible and can be resized by its corner. */
 
+/* ---------------------------------------------------------- tool options */
+
+.pink-tool-options {
+	position: fixed;
+	left: 0;
+	top: 0;
+	z-index: var(--layer-tooltip, 70);
+	display: none;
+	flex-direction: column;
+	gap: var(--size-2-2);
+	padding: var(--size-4-2) var(--size-4-3);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background-color: var(--background-primary);
+	box-shadow: var(--shadow-s, 0 4px 16px rgba(0, 0, 0, 0.25));
+}
+
+.pink-tool-options.is-open {
+	display: flex;
+}
+
+.pink-option-group {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-2);
+}
+
+.pink-option-group.is-hidden {
+	display: none;
+}
+
+.pink-option-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+}
+
+.pink-option-label {
+	min-width: 4em;
+	font-size: var(--font-smaller);
+	color: var(--text-muted);
+}
+
 .pink-tooltip {
 	position: fixed;
 	left: 0;
