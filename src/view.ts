@@ -1,4 +1,4 @@
-import { FileView, Menu, Notice, TFile, WorkspaceLeaf, setIcon } from "obsidian";
+import { FileView, Menu, Notice, Scope, TFile, WorkspaceLeaf, setIcon } from "obsidian";
 import type PinkPlugin from "./main";
 import { History } from "./history";
 import { NoteModal } from "./modals";
@@ -101,18 +101,6 @@ const TOOLS: { tool: ToolName; icon: string; label: string; key: string }[] = [
 	{ tool: "note", icon: "sticky-note", label: "Note", key: "N" },
 ];
 
-/** Ctrl + these keys zoom the page. `=` and `+` share one key on most layouts,
- * the numpad reports `Add` and `Subtract`, and `0` means "back to default". */
-const ZOOM_KEYS: Record<string, number> = {
-	"=": 1.2,
-	"+": 1.2,
-	Add: 1.2,
-	"-": 1 / 1.2,
-	_: 1 / 1.2,
-	Subtract: 1 / 1.2,
-	"0": 0,
-};
-
 export class PinkView extends FileView {
 	allowNoFile = false;
 
@@ -191,6 +179,39 @@ export class PinkView extends FileView {
 		this.highlightOpacity = s.highlightOpacity;
 		this.scale = s.defaultZoom;
 		this.dark = s.darkPdf;
+
+		// Ctrl+F and Ctrl +/-/0 already belong to Obsidian, which listens for
+		// them from the moment the app boots. A plain DOM listener never gets
+		// there first. A view scope does: Obsidian makes it the active scope
+		// while this view has focus, and a handler that returns false takes the
+		// key and stops the app's own command from running.
+		this.scope = new Scope(this.app.scope);
+		this.scope.register(["Mod"], "f", () => {
+			this.toggleSearch();
+			return false;
+		});
+		// `=` and `+` are the same physical key, with and without Shift, and the
+		// numpad reports its own names for both.
+		for (const key of ["=", "+", "Add"]) {
+			this.scope.register(["Mod"], key, () => {
+				this.zoomBy(1.2);
+				return false;
+			});
+			this.scope.register(["Mod", "Shift"], key, () => {
+				this.zoomBy(1.2);
+				return false;
+			});
+		}
+		for (const key of ["-", "_", "Subtract"]) {
+			this.scope.register(["Mod"], key, () => {
+				this.zoomBy(1 / 1.2);
+				return false;
+			});
+		}
+		this.scope.register(["Mod"], "0", () => {
+			this.setScale(this.plugin.settings.defaultZoom);
+			return false;
+		});
 	}
 
 	getViewType(): string {
@@ -243,28 +264,6 @@ export class PinkView extends FileView {
 			if (target?.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
 			this.onKeyDown(evt);
 		});
-		// Ctrl +/-/0 zooms the PDF instead of the whole app. Obsidian binds those
-		// to its own zoom commands from a listener on `document` that was
-		// attached long before ours, so bubbling up to it is already too late:
-		// this one runs in the capture phase and stops the event on the way down.
-		this.registerDomEvent(
-			document,
-			"keydown",
-			(evt) => {
-				if (!evt.ctrlKey && !evt.metaKey) return;
-				if (evt.altKey) return;
-				if (this.app.workspace.getActiveViewOfType(PinkView) !== this) return;
-				const target = evt.target as HTMLElement | null;
-				if (target?.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
-				const step = ZOOM_KEYS[evt.key];
-				if (step === undefined) return;
-				evt.preventDefault();
-				evt.stopPropagation();
-				if (step === 0) this.setScale(this.plugin.settings.defaultZoom);
-				else this.zoomBy(step);
-			},
-			true,
-		);
 		// Ctrl + wheel zooms the page too. A trackpad pinch arrives as this very
 		// same event with ctrlKey set, so both gestures land here. The listener
 		// has to be non-passive: a passive one cannot preventDefault, and
@@ -1135,6 +1134,12 @@ export class PinkView extends FileView {
 		});
 	}
 
+	/** What Ctrl+F does: the same key that opens the bar closes it again. */
+	toggleSearch(): void {
+		if (this.searchEl.hidden) this.openSearch();
+		else this.closeSearch();
+	}
+
 	openSearch(): void {
 		this.searchEl.hidden = false;
 		this.searchInput.focus();
@@ -1795,12 +1800,6 @@ export class PinkView extends FileView {
 			void this.save(true);
 			return;
 		}
-		if (mod && evt.key.toLowerCase() === "f") {
-			evt.preventDefault();
-			evt.stopPropagation();
-			this.openSearch();
-			return;
-		}
 		if (mod && evt.key.toLowerCase() === "a") {
 			evt.preventDefault();
 			this.selectAllOnPage();
@@ -1826,7 +1825,7 @@ export class PinkView extends FileView {
 		if (mod) return;
 
 		// Plain +/-/0 as well, the way every PDF reader does it. The Ctrl
-		// versions are handled by the capture listener set up in onOpen.
+		// versions are registered on the view scope, in the constructor.
 		if (evt.key === "+" || evt.key === "=") {
 			evt.preventDefault();
 			this.zoomBy(1.2);
