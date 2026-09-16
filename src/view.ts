@@ -114,6 +114,7 @@ export class PinkView extends FileView {
 	private deleteBtn!: HTMLButtonElement;
 	private noteBtn!: HTMLButtonElement;
 	private saveBtn!: HTMLButtonElement;
+	private darkBtn!: HTMLButtonElement;
 	private zoomLabel!: HTMLElement;
 	private pageInput!: HTMLInputElement;
 	private pageTotal!: HTMLElement;
@@ -135,6 +136,7 @@ export class PinkView extends FileView {
 	private brushWidth: number;
 	private highlightOpacity: number;
 	private scale: number;
+	private dark: boolean;
 
 	private tooltipEl!: HTMLElement;
 	private tooltipInput!: HTMLTextAreaElement;
@@ -170,6 +172,7 @@ export class PinkView extends FileView {
 		this.brushWidth = s.brushWidth;
 		this.highlightOpacity = s.highlightOpacity;
 		this.scale = s.defaultZoom;
+		this.dark = s.darkPdf;
 	}
 
 	getViewType(): string {
@@ -213,6 +216,7 @@ export class PinkView extends FileView {
 		});
 
 		this.buildToolbar();
+		this.applyDark();
 		this.registerDomEvent(document, "keydown", (evt) => {
 			if (this.app.workspace.getActiveViewOfType(PinkView) !== this) return;
 			if (document.body.hasClass("modal-open")) return;
@@ -394,6 +398,8 @@ export class PinkView extends FileView {
 		this.iconButton(zoom, "zoom-out", "Zoom out").addEventListener("click", () => this.zoomBy(1 / 1.2));
 		this.zoomLabel = zoom.createSpan({ cls: "pink-zoom" });
 		this.iconButton(zoom, "zoom-in", "Zoom in").addEventListener("click", () => this.zoomBy(1.2));
+		this.darkBtn = this.iconButton(zoom, "moon", "Dark PDF (D)");
+		this.darkBtn.addEventListener("click", () => this.toggleDark());
 
 		const save = bar.createDiv({ cls: "pink-group" });
 		this.saveBtn = this.iconButton(save, "save", "Save into the PDF (Ctrl+S)");
@@ -441,6 +447,7 @@ export class PinkView extends FileView {
 		this.deleteBtn.disabled = this.selection.size === 0;
 		this.noteBtn.disabled = this.selection.size !== 1;
 		this.saveBtn.toggleClass("is-dirty", this.dirty);
+		this.darkBtn.toggleClass("is-active", this.dark);
 		this.zoomLabel.setText(`${Math.round(this.scale * 100)}%`);
 		this.syncPageBox();
 	}
@@ -1151,6 +1158,20 @@ export class PinkView extends FileView {
 		}
 	}
 
+	/** Flips the page between the normal look and white-on-black. The choice is
+	 * kept in the settings so the next PDF opens the same way. */
+	toggleDark(force?: boolean): void {
+		this.dark = force ?? !this.dark;
+		this.applyDark();
+		this.updateToolbar();
+		this.plugin.settings.darkPdf = this.dark;
+		void this.plugin.saveSettings();
+	}
+
+	private applyDark(): void {
+		this.contentEl.toggleClass("is-dark-pdf", this.dark);
+	}
+
 	private pickColor(hex: string): void {
 		this.color = hex;
 		const rgb = hexToRgb(hex);
@@ -1675,6 +1696,12 @@ export class PinkView extends FileView {
 		if (evt.key === "0") {
 			evt.preventDefault();
 			this.setScale(this.plugin.settings.defaultZoom);
+			return;
+		}
+
+		if (evt.key === "d" || evt.key === "D") {
+			evt.preventDefault();
+			this.toggleDark();
 			return;
 		}
 

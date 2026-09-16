@@ -64,6 +64,7 @@ export default class PinkPlugin extends Plugin {
 		this.addViewCommand("select-all", "Select all annotations on this page", (view) => view.selectAllOnPage());
 		this.addViewCommand("save", "Save annotations into the PDF", (view) => void view.save(true));
 		this.addViewCommand("find", "Find in document", (view) => view.openSearch());
+		this.addViewCommand("toggle-dark", "Toggle dark PDF", (view) => view.toggleDark());
 	}
 
 	private addViewCommand(id: string, name: string, run: (view: PinkView) => void): void {

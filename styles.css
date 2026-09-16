@@ -215,6 +215,18 @@
 	z-index: 0;
 }
 
+/* --------------------------------------------------------------- dark pdf
+ * Only the canvas is inverted. The annotation overlay is a sibling, so
+ * highlights and brush strokes keep the colour they were drawn with. The page
+ * background matches so there is no white flash before a page renders. */
+.pink-root.is-dark-pdf .pink-page {
+	background-color: #111111;
+}
+
+.pink-root.is-dark-pdf .pink-canvas {
+	filter: invert(1) hue-rotate(180deg);
+}
+
 .pink-overlay {
 	position: absolute;
 	inset: 0;

@@ -15,6 +15,7 @@ export interface PinkSettings {
 	autosaveDelayMs: number;
 	defaultZoom: number;
 	takeOverPdfView: boolean;
+	darkPdf: boolean;
 }
 
 export const DEFAULT_SETTINGS: PinkSettings = {
@@ -29,6 +30,7 @@ export const DEFAULT_SETTINGS: PinkSettings = {
 	autosaveDelayMs: 1200,
 	defaultZoom: 1.2,
 	takeOverPdfView: true,
+	darkPdf: false,
 };
 
 export class PinkSettingTab extends PluginSettingTab {
@@ -50,6 +52,18 @@ export class PinkSettingTab extends PluginSettingTab {
 			.addToggle((t) =>
 				t.setValue(this.plugin.settings.takeOverPdfView).onChange(async (v) => {
 					this.plugin.settings.takeOverPdfView = v;
+					await this.plugin.saveSettings();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Dark PDF")
+			.setDesc(
+				"Invert the page so it reads white on black. Images inside the PDF are inverted too. Toggle it any time from the toolbar.",
+			)
+			.addToggle((t) =>
+				t.setValue(this.plugin.settings.darkPdf).onChange(async (v) => {
+					this.plugin.settings.darkPdf = v;
 					await this.plugin.saveSettings();
 				}),
 			);
