@@ -184,6 +184,12 @@
 	flex: 0 0 auto;
 }
 
+/* `hidden` is a browser-level rule, and the author-level `display: flex` above
+ * beats it whatever the specificity. Without this the bar never hides. */
+.pink-search[hidden] {
+	display: none;
+}
+
 .pink-search-input {
 	flex: 1 1 auto;
 	min-width: 0;

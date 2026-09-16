@@ -101,6 +101,18 @@ const TOOLS: { tool: ToolName; icon: string; label: string; key: string }[] = [
 	{ tool: "note", icon: "sticky-note", label: "Note", key: "N" },
 ];
 
+/** Ctrl + these keys zoom the page. `=` and `+` share one key on most layouts,
+ * the numpad reports `Add` and `Subtract`, and `0` means "back to default". */
+const ZOOM_KEYS: Record<string, number> = {
+	"=": 1.2,
+	"+": 1.2,
+	Add: 1.2,
+	"-": 1 / 1.2,
+	_: 1 / 1.2,
+	Subtract: 1 / 1.2,
+	"0": 0,
+};
+
 export class PinkView extends FileView {
 	allowNoFile = false;
 
@@ -231,6 +243,46 @@ export class PinkView extends FileView {
 			if (target?.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
 			this.onKeyDown(evt);
 		});
+		// Ctrl +/-/0 zooms the PDF instead of the whole app. Obsidian binds those
+		// to its own zoom commands from a listener on `document` that was
+		// attached long before ours, so bubbling up to it is already too late:
+		// this one runs in the capture phase and stops the event on the way down.
+		this.registerDomEvent(
+			document,
+			"keydown",
+			(evt) => {
+				if (!evt.ctrlKey && !evt.metaKey) return;
+				if (evt.altKey) return;
+				if (this.app.workspace.getActiveViewOfType(PinkView) !== this) return;
+				const target = evt.target as HTMLElement | null;
+				if (target?.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+				const step = ZOOM_KEYS[evt.key];
+				if (step === undefined) return;
+				evt.preventDefault();
+				evt.stopPropagation();
+				if (step === 0) this.setScale(this.plugin.settings.defaultZoom);
+				else this.zoomBy(step);
+			},
+			true,
+		);
+		// Ctrl + wheel zooms the page too. A trackpad pinch arrives as this very
+		// same event with ctrlKey set, so both gestures land here. The listener
+		// has to be non-passive: a passive one cannot preventDefault, and
+		// without that the app zooms along with the page.
+		this.registerDomEvent(
+			this.scrollEl,
+			"wheel",
+			(evt) => {
+				if (!evt.ctrlKey && !evt.metaKey) return;
+				evt.preventDefault();
+				// A mouse notch reports a delta in the hundreds, a pinch reports
+				// single digits. Clamping makes one notch worth about one click
+				// of the toolbar button while leaving a pinch smooth.
+				const step = Math.max(-40, Math.min(40, evt.deltaY));
+				this.zoomBy(Math.pow(1.2, -step / 40));
+			},
+			{ passive: false },
+		);
 		this.registerDomEvent(this.scrollEl, "scroll", () => {
 			// The balloon is pinned to a spot on the page, not to the window.
 			this.positionTooltip();
@@ -1773,8 +1825,8 @@ export class PinkView extends FileView {
 		}
 		if (mod) return;
 
-		// Plain +/-/0, the way every PDF reader does it. Ctrl+= and Ctrl+- are
-		// left alone because Electron uses them to zoom the whole app.
+		// Plain +/-/0 as well, the way every PDF reader does it. The Ctrl
+		// versions are handled by the capture listener set up in onOpen.
 		if (evt.key === "+" || evt.key === "=") {
 			evt.preventDefault();
 			this.zoomBy(1.2);
