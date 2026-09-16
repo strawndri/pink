@@ -121,6 +121,7 @@ export class PinkView extends FileView {
 	/** Flattened table of contents, or null until the PDF has been asked. */
 	private outline: OutlineEntry[] | null = null;
 	private swatchEls: HTMLElement[] = [];
+	private customSwatch!: HTMLInputElement;
 
 	private bytes: ArrayBuffer | null = null;
 	private pdf: any = null;
@@ -329,12 +330,27 @@ export class PinkView extends FileView {
 		for (const hex of this.plugin.settings.palette) {
 			const sw = colors.createEl("button", {
 				cls: "pink-swatch",
-				attr: { "aria-label": `Colour ${hex}`, style: `--pink-swatch: ${hex}` },
+				attr: { "aria-label": `Colour ${hex}`, title: hex },
 			});
-			sw.dataset.color = hex;
+			// Painted through the CSSOM rather than a CSS variable: an inline
+			// background beats whatever the active theme puts on <button>.
+			sw.style.backgroundColor = hex;
+			sw.dataset.color = hex.toLowerCase();
 			sw.addEventListener("click", () => this.pickColor(hex));
 			this.swatchEls.push(sw);
 		}
+
+		// Anything outside the palette. Like the sliders, it previews while the
+		// picker is open and commits on close, so one trip through it is one
+		// undo step even with a selection active.
+		this.customSwatch = colors.createEl("input", {
+			cls: "pink-swatch pink-swatch-custom",
+			type: "color",
+			attr: { "aria-label": "Custom colour", title: "Custom colour" },
+		});
+		this.customSwatch.value = this.color;
+		this.customSwatch.addEventListener("input", () => this.setColor(this.customSwatch.value));
+		this.customSwatch.addEventListener("change", () => this.pickColor(this.customSwatch.value));
 
 		const sliders = bar.createDiv({ cls: "pink-group" });
 		this.slider(
@@ -441,7 +457,14 @@ export class PinkView extends FileView {
 
 	private updateToolbar(): void {
 		for (const t of TOOLS) this.toolButtons[t.tool]?.toggleClass("is-active", this.tool === t.tool);
-		for (const sw of this.swatchEls) sw.toggleClass("is-active", sw.dataset.color === this.color);
+		let inPalette = false;
+		for (const sw of this.swatchEls) {
+			const on = sw.dataset.color === this.color.toLowerCase();
+			sw.toggleClass("is-active", on);
+			inPalette ||= on;
+		}
+		this.customSwatch.toggleClass("is-active", !inPalette);
+		if (this.customSwatch.value !== this.color.toLowerCase()) this.customSwatch.value = this.color;
 		this.undoBtn.disabled = !this.history.canUndo;
 		this.redoBtn.disabled = !this.history.canRedo;
 		this.deleteBtn.disabled = this.selection.size === 0;
@@ -1172,13 +1195,18 @@ export class PinkView extends FileView {
 		this.contentEl.toggleClass("is-dark-pdf", this.dark);
 	}
 
-	private pickColor(hex: string): void {
+	/** Makes `hex` the drawing colour without touching the current selection. */
+	private setColor(hex: string): void {
 		this.color = hex;
+		this.updateToolbar();
+	}
+
+	private pickColor(hex: string): void {
+		this.setColor(hex);
 		const rgb = hexToRgb(hex);
 		this.applyToSelection((a) => {
 			a.color = { ...rgb };
 		});
-		this.updateToolbar();
 	}
 
 	private clientToPdf(layer: PageLayer, clientX: number, clientY: number): Pt {

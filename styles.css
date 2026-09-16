@@ -89,14 +89,39 @@
 	padding: 0;
 	border: 2px solid var(--background-modifier-border);
 	border-radius: 50%;
-	background-color: var(--pink-swatch);
 	cursor: pointer;
 	box-shadow: none;
+	/* The colour is set inline on the element. Themes paint <button> and
+	 * <input> with a background of their own, so the native look has to go or
+	 * every swatch ends up the same flat grey. */
+	background-image: none;
+	-webkit-appearance: none;
+	appearance: none;
 }
 
 .pink-swatch.is-active {
 	border-color: var(--interactive-accent);
 	transform: scale(1.15);
+}
+
+/* The "pick your own" swatch is an <input type="color">. Dashed while it holds
+ * no colour of its own, solid once it is the one in use. */
+.pink-swatch-custom {
+	overflow: hidden;
+	border-style: dashed;
+}
+
+.pink-swatch-custom.is-active {
+	border-style: solid;
+}
+
+.pink-swatch-custom::-webkit-color-swatch-wrapper {
+	padding: 0;
+}
+
+.pink-swatch-custom::-webkit-color-swatch {
+	border: none;
+	border-radius: 50%;
 }
 
 .pink-slider {
