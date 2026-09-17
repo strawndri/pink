@@ -216,11 +216,94 @@
 
 /* ----------------------------------------------------------------- pages */
 
+.pink-body {
+	display: flex;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
 .pink-scroll {
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow: auto;
 	padding: var(--size-4-4);
+}
+
+/* --------------------------------------------------------------- sidebar */
+
+.pink-sidebar {
+	display: none;
+	flex: 0 0 220px;
+	overflow-y: auto;
+	border-right: 1px solid var(--background-modifier-border);
+	background-color: var(--background-secondary);
+	padding: var(--size-4-2) 0;
+}
+
+.pink-sidebar.is-open {
+	display: block;
+}
+
+.pink-sidebar-empty {
+	padding: var(--size-4-2) var(--size-4-3);
+	color: var(--text-muted);
+	font-size: var(--font-smaller);
+}
+
+.pink-toc-item {
+	padding: var(--size-2-2) var(--size-4-3);
+	font-size: var(--font-smaller);
+	color: var(--text-muted);
+	cursor: pointer;
+	white-space: normal;
+}
+
+.pink-toc-item:hover:not(.is-disabled) {
+	background-color: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.pink-toc-item.is-current {
+	color: var(--text-on-accent);
+	background-color: var(--interactive-accent);
+}
+
+.pink-toc-item.is-disabled {
+	cursor: default;
+	opacity: 0.5;
+}
+
+.pink-thumb {
+	position: relative;
+	display: flex;
+	justify-content: center;
+	padding: var(--size-4-2);
+	cursor: pointer;
+}
+
+.pink-thumb-canvas {
+	display: block;
+	max-width: 100%;
+	background-color: white;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+	border: 2px solid transparent;
+	border-radius: var(--radius-s);
+}
+
+.pink-thumb.is-current .pink-thumb-canvas {
+	border-color: var(--interactive-accent);
+}
+
+.pink-thumb-badge {
+	position: absolute;
+	right: var(--size-4-3);
+	bottom: var(--size-4-2);
+	padding: 0 var(--size-2-1);
+	border-radius: var(--radius-s);
+	background-color: rgba(0, 0, 0, 0.75);
+	color: white;
+	font-size: var(--font-smallest);
+	font-variant-numeric: tabular-nums;
 }
 
 .pink-pages {

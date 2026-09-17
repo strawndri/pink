@@ -105,6 +105,8 @@ export class PinkView extends FileView {
 	allowNoFile = false;
 
 	private toolbarEl!: HTMLElement;
+	private bodyEl!: HTMLElement;
+	private sidebarEl!: HTMLElement;
 	private scrollEl!: HTMLElement;
 	private pagesEl!: HTMLElement;
 	private statusEl!: HTMLElement;
@@ -118,11 +120,22 @@ export class PinkView extends FileView {
 	private noteBtn!: HTMLButtonElement;
 	private saveBtn!: HTMLButtonElement;
 	private darkBtn!: HTMLButtonElement;
+	private outlineBtn!: HTMLButtonElement;
+	private thumbsBtn!: HTMLButtonElement;
 	private zoomLabel!: HTMLElement;
 	private pageInput!: HTMLInputElement;
 	private pageTotal!: HTMLElement;
 	/** Flattened table of contents, or null until the PDF has been asked. */
 	private outline: OutlineEntry[] | null = null;
+	/** Which side panel is showing. Only meaningful while sidebarOpen. */
+	private sidebarMode: "outline" | "thumbnails" = "outline";
+	private sidebarOpen = false;
+	/** Entries currently drawn in the outline panel, kept to update the
+	 * current-page highlight without rebuilding the whole list. */
+	private tocItems: { el: HTMLElement; page: number }[] = [];
+	/** Thumbnails currently drawn in the thumbnail panel, same reason. */
+	private thumbItems: { el: HTMLElement; canvas: HTMLCanvasElement; index: number }[] = [];
+	private thumbObserver: IntersectionObserver | null = null;
 	private swatchEls: HTMLElement[] = [];
 	private customSwatch!: HTMLInputElement;
 
@@ -233,7 +246,9 @@ export class PinkView extends FileView {
 		this.contentEl.addClass("pink-root");
 		this.toolbarEl = this.contentEl.createDiv({ cls: "pink-toolbar" });
 		this.buildSearchBar();
-		this.scrollEl = this.contentEl.createDiv({ cls: "pink-scroll" });
+		this.bodyEl = this.contentEl.createDiv({ cls: "pink-body" });
+		this.sidebarEl = this.bodyEl.createDiv({ cls: "pink-sidebar" });
+		this.scrollEl = this.bodyEl.createDiv({ cls: "pink-scroll" });
 		this.pagesEl = this.scrollEl.createDiv({ cls: "pink-pages" });
 		this.statusEl = this.contentEl.createDiv({ cls: "pink-status" });
 		this.tooltipEl = document.body.createDiv({ cls: "pink-tooltip" });
@@ -331,6 +346,7 @@ export class PinkView extends FileView {
 			this.redrawAll();
 			this.updateToolbar();
 			this.updateStatus();
+			if (this.sidebarOpen) void this.syncSidebar();
 		} catch (err) {
 			console.error("Pink: failed to open", err);
 			this.setStatus(`Could not open this PDF: ${(err as Error).message}`);
@@ -360,6 +376,10 @@ export class PinkView extends FileView {
 	private teardownPages(): void {
 		this.observer?.disconnect();
 		this.observer = null;
+		this.thumbObserver?.disconnect();
+		this.thumbObserver = null;
+		this.tocItems = [];
+		this.thumbItems = [];
 		for (const layer of this.layers) layer.renderTask?.cancel?.();
 		this.layers = [];
 		this.pagesEl.empty();
@@ -376,6 +396,12 @@ export class PinkView extends FileView {
 	private buildToolbar(): void {
 		const bar = this.toolbarEl;
 		bar.empty();
+
+		const outline = bar.createDiv({ cls: "pink-group" });
+		this.outlineBtn = this.iconButton(outline, "list", "Table of contents");
+		this.outlineBtn.addEventListener("click", () => void this.toggleSidebar("outline"));
+		this.thumbsBtn = this.iconButton(outline, "layout-grid", "Page thumbnails");
+		this.thumbsBtn.addEventListener("click", () => this.toggleSidebar("thumbnails"));
 
 		const tools = bar.createDiv({ cls: "pink-group" });
 		for (const t of TOOLS) {
@@ -426,9 +452,6 @@ export class PinkView extends FileView {
 		this.deleteBtn.addEventListener("click", () => this.deleteSelection());
 
 		const nav = bar.createDiv({ cls: "pink-group" });
-		this.iconButton(nav, "list", "Table of contents").addEventListener("click", (evt) =>
-			void this.showOutline(evt),
-		);
 		this.pageInput = nav.createEl("input", {
 			cls: "pink-page-input",
 			type: "text",
@@ -813,23 +836,94 @@ export class PinkView extends FileView {
 		}
 	}
 
-	private async showOutline(evt: MouseEvent): Promise<void> {
+	/** Opens the given panel, or closes the sidebar if it's already showing. */
+	private toggleSidebar(mode: "outline" | "thumbnails"): void {
+		this.sidebarOpen = !(this.sidebarOpen && this.sidebarMode === mode);
+		this.sidebarMode = mode;
+		void this.syncSidebar();
+	}
+
+	private async syncSidebar(): Promise<void> {
+		this.sidebarEl.toggleClass("is-open", this.sidebarOpen);
+		this.outlineBtn.toggleClass("is-active", this.sidebarOpen && this.sidebarMode === "outline");
+		this.thumbsBtn.toggleClass("is-active", this.sidebarOpen && this.sidebarMode === "thumbnails");
+		if (!this.sidebarOpen) return;
+		if (this.sidebarMode === "outline") await this.renderOutlinePanel();
+		else this.renderThumbnailPanel();
+	}
+
+	private async renderOutlinePanel(): Promise<void> {
 		await this.ensureOutline();
-		const menu = new Menu();
+		this.sidebarEl.empty();
+		this.tocItems = [];
 		if (!this.outline || this.outline.length === 0) {
-			menu.addItem((item) => item.setTitle("This PDF has no table of contents").setDisabled(true));
-		} else {
-			for (const entry of this.outline) {
-				menu.addItem((item) =>
-					item
-						// Menu titles are plain text, so nesting is shown with padding.
-						.setTitle("\u00a0\u00a0\u00a0\u00a0".repeat(entry.depth) + entry.title)
-						.setDisabled(entry.page < 0)
-						.onClick(() => this.goToPage(entry.page)),
-				);
-			}
+			this.sidebarEl.createDiv({ cls: "pink-sidebar-empty", text: "This PDF has no table of contents" });
+			return;
 		}
-		menu.showAtMouseEvent(evt);
+		for (const entry of this.outline) {
+			const item = this.sidebarEl.createDiv({ cls: "pink-toc-item", text: entry.title });
+			item.style.paddingLeft = `${12 + entry.depth * 16}px`;
+			if (entry.page < 0) {
+				item.addClass("is-disabled");
+			} else {
+				item.addEventListener("click", () => this.goToPage(entry.page));
+			}
+			this.tocItems.push({ el: item, page: entry.page });
+		}
+		this.syncTocHighlight();
+	}
+
+	private renderThumbnailPanel(): void {
+		this.sidebarEl.empty();
+		this.thumbItems = [];
+		this.thumbObserver?.disconnect();
+		this.thumbObserver = new IntersectionObserver(
+			(entries) => {
+				for (const entry of entries) {
+					if (!entry.isIntersecting) continue;
+					const index = Number((entry.target as HTMLElement).dataset.page);
+					const layer = this.layers[index];
+					const thumb = this.thumbItems[index];
+					if (layer && thumb) void this.renderThumbnail(layer, thumb.canvas);
+				}
+			},
+			{ root: this.sidebarEl, rootMargin: "300px 0px" },
+		);
+		for (const layer of this.layers) {
+			const item = this.sidebarEl.createDiv({ cls: "pink-thumb" });
+			item.dataset.page = String(layer.index);
+			const canvas = item.createEl("canvas", { cls: "pink-thumb-canvas" });
+			item.createSpan({ cls: "pink-thumb-badge", text: String(layer.index + 1) });
+			item.addEventListener("click", () => this.goToPage(layer.index));
+			this.thumbItems.push({ el: item, canvas, index: layer.index });
+			this.thumbObserver.observe(item);
+		}
+		this.syncThumbHighlight();
+	}
+
+	/** Renders a small preview of the page into a thumbnail's own canvas, once. */
+	private async renderThumbnail(layer: PageLayer, canvas: HTMLCanvasElement): Promise<void> {
+		if (canvas.dataset.rendered) return;
+		canvas.dataset.rendered = "1";
+		try {
+			const viewport = layer.page.getViewport({ scale: 140 / layer.viewport1.width });
+			canvas.width = Math.floor(viewport.width);
+			canvas.height = Math.floor(viewport.height);
+			const ctx = canvas.getContext("2d");
+			if (!ctx) return;
+			await layer.page.render({ canvasContext: ctx, viewport, annotationMode: ANNOTATIONS_OFF }).promise;
+		} catch (err) {
+			console.error("Pink: thumbnail render failed", err);
+			canvas.dataset.rendered = "";
+		}
+	}
+
+	private syncTocHighlight(): void {
+		for (const item of this.tocItems) item.el.toggleClass("is-current", item.page === this.currentPage);
+	}
+
+	private syncThumbHighlight(): void {
+		for (const thumb of this.thumbItems) thumb.el.toggleClass("is-current", thumb.index === this.currentPage);
 	}
 
 	private updateCurrentPage(): void {
@@ -843,6 +937,8 @@ export class PinkView extends FileView {
 			this.currentPage = index;
 			this.syncPageBox();
 			this.updateStatus();
+			if (this.sidebarOpen && this.sidebarMode === "outline") this.syncTocHighlight();
+			if (this.sidebarOpen && this.sidebarMode === "thumbnails") this.syncThumbHighlight();
 		}
 	}
 
