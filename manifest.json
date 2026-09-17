@@ -1,7 +1,7 @@
 {
   "id": "pink",
   "name": "Pink",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "minAppVersion": "1.4.0",
   "description": "Draw, highlight and attach notes directly inside PDF files. Every annotation is written into the PDF itself - no extra notes are created in your vault.",
   "author": "Andrieli",
