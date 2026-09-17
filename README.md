@@ -1,78 +1,85 @@
 # Pink for Obsidian
 
-Draw, highlight and take notes inside PDF files, without leaving Obsidian.
+Read PDFs and mark them up inside Obsidian. Draw, highlight and write notes.
 
-Everything you make is written into the PDF itself, as a standard PDF
-annotation. The plugin never creates a note or any other file in your vault, and
-the annotated PDF opens the same way in any other reader.
+Everything you make goes into the PDF file itself, as a normal PDF annotation.
+The plugin never creates a note or any other file in your vault, and the PDF
+opens the same way in any other reader.
 
 ## Tools
 
 | Tool | Key | What it does |
 | --- | --- | --- |
-| Select | `V` | Click an annotation to select it, or drag a box around several |
+| Select | `V` | Click an annotation to pick it, or drag a box to pick many |
 | Text | `T` | Select words and copy them with `Ctrl+C` |
-| Brush | `B` | Freehand drawing |
-| Highlight | `H` | Drag across words to paint them, one bar per line |
+| Brush | `B` | Free drawing |
+| Highlight | `H` | Drag over words to paint them |
 | Note | `N` | Attach written text to a passage or to a spot on the page |
 
-Pick the colour from the swatches in the toolbar. The two sliders set brush
-width and highlight opacity. If something is selected, changing a colour or a
-slider applies to it.
+Pick a colour from the toolbar swatches. The last swatch is a colour picker, for
+any colour outside the palette.
 
-### How the note tool works
+Hover the brush, highlight or note button and a small panel opens with the
+sliders for that tool. Brush has width and opacity, highlight and note have
+opacity. If something is selected, changing a colour or a slider changes it.
+
+### The note tool
 
 It follows what your mouse does:
 
-- **Drag across words** and they are painted, like a highlight, with your text
-  attached to them. Use this to comment on a passage.
-- **Click once** and you get a small square marker wherever you clicked. Use
-  this for figures, tables and margins, where there is no text to select.
+- **Drag over words** and they get painted, like a highlight, with your text
+  attached. Good for a comment on a passage.
+- **Click once** and you get a small square marker there. Good for figures,
+  tables and margins, where there is no text to select.
 
 Either way, a box opens for you to write in.
 
 ### Reading and editing a note
 
-Hover any annotation that carries a note. A balloon opens right above it with
-the text inside. You can type in it directly, and drag its bottom corner to make
-it bigger. It saves when you click away, and `Esc` closes it.
+Hover any annotation that has a note. A balloon opens above it with the text
+inside. You can type in it, and drag the bottom corner to make it bigger. It
+saves when you click away, and `Esc` closes it.
 
-`Enter` or a double-click opens the same note in a larger window, which also has
+`Enter` or a double click opens the same note in a bigger window, which also has
 a delete button.
 
-## Getting around
+## Reading
 
-`Ctrl+F` searches the whole document. `Enter` and `Shift+Enter` walk through the
-matches, and the counter says where you are. Every match is marked on its page,
-with the current one brighter.
+`Ctrl+F` opens the search bar, and press it again to close. `Enter` and
+`Shift+Enter` walk through the matches, and the counter shows where you are.
+Every match is marked on its page, and the current one is brighter.
 
-The list button in the toolbar opens the PDF's own table of contents, when it
+The list button in the toolbar opens the PDF table of contents, when the file
 has one. Next to it, the page box takes a number and jumps there.
 
-Zoom with `+` and `-`, or `0` to go back to your default. The toolbar buttons do
-the same. `Ctrl+=` and `Ctrl+-` are left alone, because Obsidian uses them to
-zoom the whole app.
+Zoom with `+` and `-`, or `0` to go back to your default. `Ctrl` plus the mouse
+wheel works too, and so does a trackpad pinch. The toolbar buttons do the same.
+
+The moon button, or `D`, turns the page white on black. Images inside the PDF
+are inverted too. Your choice is saved, so the next PDF opens the same way.
 
 ## Saving
 
 Autosave writes into the PDF about a second after you stop working. `Ctrl+S`
-saves right away. The bar at the bottom says `saved`, `unsaved` or `saving`.
+saves right away. The bar at the bottom shows `saved`, `unsaved` or `saving`.
 
-Only the annotation types this plugin owns are rewritten. Anything else already
-in the file, such as links or form fields, is preserved untouched.
+Only the annotations this plugin owns are rewritten. Anything else already in
+the file, like links or form fields, stays untouched.
 
 ## Keys
 
 | | |
 | --- | --- |
 | `V` `T` `B` `H` `N` | select, text, brush, highlight, note |
-| `Ctrl+F` | find in document |
-| `+` `-` `0` | zoom in, zoom out, reset |
+| `Ctrl+F` | open or close the search bar |
+| `+` `-` `0` | zoom in, zoom out, reset (with or without `Ctrl`) |
+| `Ctrl` + wheel | zoom the page |
+| `D` | dark PDF on or off |
 | `Ctrl+Z`, `Ctrl+Shift+Z` | undo, redo |
-| `Enter`, double-click | edit the note of the selected annotation |
-| `Delete` | delete selection |
-| `Esc` | clear selection |
-| `Ctrl+A` | select everything on the current page |
+| `Enter`, double click | edit the note of the selected annotation |
+| `Delete` | delete the selection |
+| `Esc` | clear the selection |
+| `Ctrl+A` | select everything on the page |
 | `Ctrl+S` | save into the PDF |
 
 ## Install
@@ -84,12 +91,12 @@ npm run deploy -- /path/to/your/vault
 
 Then reload Obsidian and turn **Pink** on in *Settings → Community plugins*.
 
-`npm run deploy` builds first. With no argument it uses `$OBSIDIAN_VAULT`, then
-the path saved in `.vaultpath`.
+`npm run deploy` builds first. With no path it uses `$OBSIDIAN_VAULT`, then the
+path saved in `.vaultpath`.
 
 ## Settings
 
-Which PDFs open in Pink, the default tool and zoom, brush and highlight
+Which PDFs open in Pink, dark PDF, default tool and zoom, brush and highlight
 defaults, the swatch palette, and autosave with its delay.
 
 ## Develop
@@ -97,10 +104,10 @@ defaults, the swatch palette, and autosave with its delay.
 ```bash
 npm run dev     # esbuild watch
 npm run build   # typecheck + production bundle
-npm test        # PDF round-trip and geometry tests
+npm test        # PDF round trip and geometry tests
 ```
 
-Two more tests are kept out of `npm test` because they each need something from
+Two more tests are left out of `npm test` because each one needs something from
 you:
 
 ```bash
@@ -109,8 +116,7 @@ node test/browser/layers.mjs    # needs firefox + geckodriver on PATH
 ```
 
 The browser one loads the real `styles.css` and checks that text stays
-selectable under the annotation overlay, which is what the highlight tool
-depends on.
+selectable under the annotation layer, which is what the highlight tool needs.
 
 ### Layout
 
@@ -122,5 +128,5 @@ depends on.
 | `src/pdfjs.ts` | Thin cover over the pdf.js that Obsidian ships |
 | `src/modals.ts`, `src/settings.ts`, `src/history.ts` | Note window, settings tab, undo stack |
 
-Coordinates are stored in PDF user space, with the origin at the bottom-left of
-the page, so they survive zooming and round-trip through the file unchanged.
+Coordinates are kept in PDF user space, with the origin at the bottom left of
+the page, so they survive zooming and go through the file unchanged.
