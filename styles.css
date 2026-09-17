@@ -329,6 +329,21 @@
 	z-index: 0;
 }
 
+/* Its own <svg>, not a shape inside .pink-overlay: an <svg> always composites
+ * its contents as one isolated group, so a blend mode on a shape only reaches
+ * other shapes in the same svg, never the canvas below it. Putting the blend
+ * on this whole layer instead lets it multiply against the rendered page. */
+.pink-highlight-layer {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+	z-index: 1;
+	pointer-events: none;
+	mix-blend-mode: multiply;
+}
+
 /* --------------------------------------------------------------- dark pdf
  * Only the canvas is inverted. The annotation overlay is a sibling, so
  * highlights and brush strokes keep the colour they were drawn with. The page
@@ -348,7 +363,7 @@
 	height: 100%;
 	overflow: visible;
 	/* Above the text layer, so annotations stay clickable in select mode. */
-	z-index: 2;
+	z-index: 3;
 	/* An inline <svg> is hit-tested over its whole box, which would swallow the
 	 * drag that selects text underneath. Every child that has to be clickable
 	 * (the annotations, the drawing backdrop) re-enables this for itself. */
@@ -399,7 +414,7 @@
 	forced-color-adjust: none;
 	transform-origin: 0 0;
 	opacity: 1;
-	z-index: 1;
+	z-index: 2;
 	caret-color: transparent;
 	-webkit-user-select: text;
 	user-select: text;

@@ -79,6 +79,12 @@ interface PageLayer {
 	container: HTMLElement;
 	canvas: HTMLCanvasElement;
 	textEl: HTMLElement;
+	/** Holds only the highlight fill quads, blended with the rendered page
+	 * underneath via multiply. Kept separate from `overlay`, because an <svg>
+	 * always composites its children as one isolated group: a blend mode set on
+	 * a shape inside `overlay` would only blend against other shapes in that
+	 * same svg, never against the canvas below it. */
+	highlightLayer: SVGSVGElement;
 	overlay: SVGSVGElement;
 	hitBg: SVGRectElement;
 	annotGroup: SVGGElement;
@@ -641,6 +647,11 @@ export class PinkView extends FileView {
 			const container = this.pagesEl.createDiv({ cls: "pink-page" });
 			container.dataset.page = String(i);
 			const canvas = container.createEl("canvas", { cls: "pink-canvas" });
+			const highlightLayer = document.createElementNS(SVG_NS, "svg");
+			highlightLayer.addClass("pink-highlight-layer");
+			highlightLayer.setAttribute("viewBox", `0 0 ${viewport1.width} ${viewport1.height}`);
+			highlightLayer.setAttribute("preserveAspectRatio", "none");
+			container.appendChild(highlightLayer);
 			const textEl = container.createDiv({ cls: "textLayer pink-textlayer" });
 			const overlay = document.createElementNS(SVG_NS, "svg");
 			overlay.addClass("pink-overlay");
@@ -670,6 +681,7 @@ export class PinkView extends FileView {
 				container,
 				canvas,
 				textEl,
+				highlightLayer,
 				overlay,
 				hitBg,
 				annotGroup,
@@ -950,6 +962,7 @@ export class PinkView extends FileView {
 
 	private redrawPage(layer: PageLayer): void {
 		layer.annotGroup.empty();
+		layer.highlightLayer.empty();
 		const interactive = this.tool === "select";
 		layer.annotGroup.setAttribute("pointer-events", interactive ? "auto" : "none");
 		for (const annot of this.annots) {
@@ -992,10 +1005,21 @@ export class PinkView extends FileView {
 			}
 		} else if (annot.kind === "highlight") {
 			for (const quad of annot.quads) {
-				el(group, "polygon", {
+				// The visible fill lives in highlightLayer, a separate <svg> that is
+				// itself set to multiply against the rendered page (see PageLayer).
+				// A shape's own mix-blend-mode can't reach past its own <svg>, so
+				// doing this here instead would only blend against other shapes in
+				// `overlay`, never against the glyphs on the canvas below it.
+				el(layer.highlightLayer, "polygon", {
 					points: quadToPoints(vp, quad),
 					fill: rgbToCss(annot.color),
 					"fill-opacity": String(annot.opacity),
+				});
+				// An invisible twin stays here so clicking and selecting the
+				// highlight still works the normal way.
+				el(group, "polygon", {
+					points: quadToPoints(vp, quad),
+					fill: "transparent",
 					"pointer-events": hit,
 				});
 			}
@@ -1427,7 +1451,13 @@ export class PinkView extends FileView {
 	}
 
 	private clientToPdf(layer: PageLayer, clientX: number, clientY: number): Pt {
-		const box = layer.overlay.getBoundingClientRect();
+		return this.pdfPtFromBox(layer, layer.overlay.getBoundingClientRect(), clientX, clientY);
+	}
+
+	/** Same as `clientToPdf`, but taking an already-read box: `getBoundingClientRect`
+	 * forces a layout flush, and a caller converting several points at once (a whole
+	 * text selection, say) only needs to pay for that once. */
+	private pdfPtFromBox(layer: PageLayer, box: DOMRect, clientX: number, clientY: number): Pt {
 		const sx = ((clientX - box.left) * layer.viewport1.width) / (box.width || 1);
 		const sy = ((clientY - box.top) * layer.viewport1.height) / (box.height || 1);
 		return toPdfPt(layer.viewport1, sx, sy);
@@ -1554,9 +1584,18 @@ export class PinkView extends FileView {
 		// Releasing the mouse past the end of the last line makes the browser drop
 		// the selection entirely, so remember the last good one as the drag runs.
 		let lastQuads: Rect[] | null = null;
+		// selectionchange fires for nearly every pixel the pointer crosses, far more
+		// often than a frame is drawn. Reading it straight away, on every one of
+		// those, is what made dragging feel behind the mouse; once per frame is all
+		// the redraw loop can use anyway.
+		let rememberFrame = 0;
 		const remember = () => {
-			const quads = this.quadsFromTextSelection(layer);
-			if (quads) lastQuads = quads;
+			if (rememberFrame) return;
+			rememberFrame = window.requestAnimationFrame(() => {
+				rememberFrame = 0;
+				const quads = this.quadsFromTextSelection(layer);
+				if (quads) lastQuads = quads;
+			});
 		};
 		document.addEventListener("selectionchange", remember);
 
@@ -1567,6 +1606,7 @@ export class PinkView extends FileView {
 			},
 			() => {
 				document.removeEventListener("selectionchange", remember);
+				if (rememberFrame) window.cancelAnimationFrame(rememberFrame);
 				// Only a drag reads the text selection. Without this a click landing
 				// inside a selection left over from before would paint those words
 				// instead of dropping a marker where the pointer actually is.
@@ -1652,11 +1692,12 @@ export class PinkView extends FileView {
 		const range = sel.getRangeAt(0);
 		if (!layer.textEl.contains(range.commonAncestorContainer)) return null;
 
+		const overlayBox = layer.overlay.getBoundingClientRect();
 		const quads: Rect[] = [];
 		for (const box of Array.from(range.getClientRects())) {
 			if (box.width < 0.5 || box.height < 0.5) continue;
-			const a = this.clientToPdf(layer, box.left, box.top);
-			const b = this.clientToPdf(layer, box.right, box.bottom);
+			const a = this.pdfPtFromBox(layer, overlayBox, box.left, box.top);
+			const b = this.pdfPtFromBox(layer, overlayBox, box.right, box.bottom);
 			quads.push(normRect(a, b));
 		}
 		return quads.length > 0 ? mergeLineQuads(dropContainers(quads)) : null;
