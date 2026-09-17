@@ -6,6 +6,20 @@ Everything you make goes into the PDF file itself, as a normal PDF annotation.
 The plugin never creates a note or any other file in your vault, and the PDF
 opens the same way in any other reader.
 
+## Install
+
+```bash
+git clone git@github.com:strawndri/pink.git
+cd pink
+npm install
+npm run deploy -- /path/to/your/vault
+```
+
+Then reload Obsidian and turn **Pink** on in *Settings -> Community plugins*.
+
+`npm run deploy` builds first. With no path it uses `$OBSIDIAN_VAULT`, then the
+path saved in `.vaultpath`.
+
 ## Tools
 
 | Tool | Key | What it does |
@@ -81,20 +95,6 @@ the file, like links or form fields, stays untouched.
 | `Esc` | clear the selection |
 | `Ctrl+A` | select everything on the page |
 | `Ctrl+S` | save into the PDF |
-
-## Install
-
-```bash
-git clone git@github.com:strawndri/pink.git
-cd pink
-npm install
-npm run deploy -- /path/to/your/vault
-```
-
-Then reload Obsidian and turn **Pink** on in *Settings -> Community plugins*.
-
-`npm run deploy` builds first. With no path it uses `$OBSIDIAN_VAULT`, then the
-path saved in `.vaultpath`.
 
 ### Layout
 
