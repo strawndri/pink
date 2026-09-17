@@ -1,4 +1,4 @@
-# Pink for Obsidian
+# PDF Ink for Obsidian
 
 Read PDFs and mark them up inside Obsidian. Draw, highlight and write notes.
 
@@ -85,38 +85,16 @@ the file, like links or form fields, stays untouched.
 ## Install
 
 ```bash
+git clone git@github.com:strawndri/pink.git
+cd pink
 npm install
 npm run deploy -- /path/to/your/vault
 ```
 
-Then reload Obsidian and turn **Pink** on in *Settings → Community plugins*.
+Then reload Obsidian and turn **Pink** on in *Settings -> Community plugins*.
 
 `npm run deploy` builds first. With no path it uses `$OBSIDIAN_VAULT`, then the
 path saved in `.vaultpath`.
-
-## Settings
-
-Which PDFs open in Pink, dark PDF, default tool and zoom, brush and highlight
-defaults, the swatch palette, and autosave with its delay.
-
-## Develop
-
-```bash
-npm run dev     # esbuild watch
-npm run build   # typecheck + production bundle
-npm test        # PDF round trip and geometry tests
-```
-
-Two more tests are left out of `npm test` because each one needs something from
-you:
-
-```bash
-node test/realpdfs.mjs /path/to/a/folder/of/pdfs
-node test/browser/layers.mjs    # needs firefox + geckodriver on PATH
-```
-
-The browser one loads the real `styles.css` and checks that text stays
-selectable under the annotation layer, which is what the highlight tool needs.
 
 ### Layout
 
@@ -127,6 +105,3 @@ selectable under the annotation layer, which is what the highlight tool needs.
 | `src/types.ts` | Geometry and the annotation model |
 | `src/pdfjs.ts` | Thin cover over the pdf.js that Obsidian ships |
 | `src/modals.ts`, `src/settings.ts`, `src/history.ts` | Note window, settings tab, undo stack |
-
-Coordinates are kept in PDF user space, with the origin at the bottom left of
-the page, so they survive zooming and go through the file unchanged.
